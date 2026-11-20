@@ -1,0 +1,269 @@
+<body style="padding:90px; font-size:20px; font-family:system-ui; margin:0; box-sizing:border-box;">
+    <div style="text-align:center;">
+        <h3 id="pageTitle" style="margin-bottom:8px;">语音通话小页面</h3>
+        <p id="pageDesc" style="font-size:15px; margin-bottom:25px;">这是语音对话小程序</p >
+    </div>
+
+<div style="text-align:center; margin-bottom:16px;">
+<span id="themeTip" style="font-size:16px;">主题颜色：</span>
+<button class="theme-btn" data-theme="pink" style="width:24px;height:24px;border-radius:50%;border:none;background:#f09fbb;margin:0 3px;cursor:pointer;outline:1px solid #444;" title="pink"></button>
+<button class="theme-btn" data-theme="orange" style="width:24px;height:24px;border-radius:50%;border:none;background:#f2995a;margin:0 3px;cursor:pointer;outline:1px solid #444;" title="orange"></button>
+<button class="theme-btn" data-theme="yellow" style="width:24px;height:24px;border-radius:50%;border:none;background:#f7d362;margin:0 3px;cursor:pointer;outline:1px solid #444;" title="yellow"></button>
+<button class="theme-btn" data-theme="green" style="width:24px;height:24px;border-radius:50%;border:none;background:#62bb70;margin:0 3px;cursor:pointer;outline:1px solid #444;" title="green"></button>
+<button class="theme-btn" data-theme="blue" style="width:24px;height:24px;border-radius:50%;border:none;background:#62a8dd;margin:0 3px;cursor:pointer;outline:1px solid #444;" title="blue"></button>
+<button class="theme-btn" data-theme="purple" style="width:24px;height:24px;border-radius:50%;border:none;background:#9d7cd8;margin:0 3px;cursor:pointer;outline:1px solid #444;" title="purple"></button>
+<button class="theme-btn" data-theme="black" style="width:24px;height:24px;border-radius:50%;border:none;background:#111111;margin:0 3px;cursor:pointer;outline:1px solid #888;" title="black"></button>
+<button class="theme-btn" data-theme="white" style="width:24px;height:24px;border-radius:50%;border:none;background:#ffffff;border:1px solid #ccc;margin:0 3px;cursor:pointer;outline:1px solid #444;" title="white"></button>
+<button class="theme-btn" data-theme="brown" style="width:24px;height:24px;border-radius:50%;border:none;background:#a67c52;margin:0 3px;cursor:pointer;outline:1px solid #444;" title="brown"></button>
+</div>
+
+    <div style="text-align:center;">
+        <button id="callBtn" title="打开麦克风，连接客服" style="font-size:20px; padding:12px 0; width:180px; margin:6px; color:white; border:none; border-radius:12px; cursor:pointer; box-shadow: 0 3px 8px; transition:0.2s;">拨打</button>
+        <button id="hangBtn" title="关掉麦克风，断开连接" style="font-size:20px; padding:12px 0; width:180px; margin:6px; color:white; border:none; border-radius:12px; cursor:pointer; box-shadow: 0 3px 8px; transition:0.2s;">挂断</button>
+        <button id="interruptBtn" title="立刻停止播放声音，告诉对方不要说话" style="font-size:20px; padding:12px 0; width:180px; margin:6px; color:white; border:none; border-radius:12px; cursor:pointer; box-shadow: 0 3px 8px; transition:0.2s;">打断</button>
+        <button id="clearSubBtn" title="只清空字幕内容，不中断通话" style="font-size:20px; padding:12px 0; width:180px; margin:6px; color:white; border:none; border-radius:12px; cursor:pointer; box-shadow: 0 3px 8px; transition:0.2s;">清空字幕</button>
+        <div id="statusText" style="margin-top:12px; font-size:18px;">【状态：未连接】</div>
+        <div id="timeText" style="margin-top:6px; font-size:17px; display:none;">通话时长：00:00</div>
+        <div id="tipText" style="margin-top:10px; font-size:17px; color:#d63031; display:none;"></div>
+    </div>
+
+    <div style="margin-top:30px; text-align:center;">
+        <h4 id="subTitleHead" style="text-align:left; width:600px; max-width:90%; margin-left:auto; margin-right:auto;">字幕框：</h4>
+        <div id="subtitle" style="border-width:2px; border-style:solid; width:600px; max-width:90%; height:250px; padding:15px; font-size:18px; border-radius:14px; overflow-y:auto; font-family: 'Microsoft YaHei', sans-serif; text-align:left; display:inline-block; white-space:pre-wrap;"></div>
+    </div>
+
+    <div style="text-align:center; margin-top:24px; font-size:14px; color:#666;">
+        参赛小组 · 智能语音对话助手
+    </div>
+    <style>
+        button:hover:not(:disabled) {
+            filter: brightness(1.15);
+        }
+        button:disabled {
+            cursor:not-allowed;
+            filter:none;
+            opacity:0.7;
+        }
+        .loading-spin{
+            display:inline-block;
+            width:16px;
+            height:16px;
+            border:3px solid #ffe082;
+            border-top-color:#f57f17;
+            border-radius:50%;
+            animation: spin 0.8s linear infinite;
+            margin-left:8px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .user-text{
+        }
+        .ai-text{
+        }
+        body[theme="black"] #themeTip,
+        body[theme="black"] #statusText{
+        color:#ffffff !important;
+}
+    </style>
+    <script>
+        const WS_URL = "ws://10.30.32.62:8000/ws";
+        let ws = null;
+        let mediaStream = null;
+        let audio = null;
+        let timer = null;
+        let startTime = null;
+        let audioQueue = [];
+let currentAudio = null;
+
+function clearAudioQueue() {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.src = "";
+    currentAudio = null;
+  }
+  audioQueue = [];
+}
+
+function enqueueAudio(audioUrl) {
+  const audio = new Audio(audioUrl);
+  audio.onended = () => {
+    currentAudio = null;
+    if (audioQueue.length > 0) {
+      currentAudio = audioQueue.shift();
+      currentAudio.play();
+    }
+  };
+  audioQueue.push(audio);
+  if (!currentAudio) {
+    currentAudio = audioQueue.shift();
+    currentAudio.play();
+  }
+}
+
+        const statusEl = document.getElementById("statusText");
+        const tipEl = document.getElementById("tipText");
+        const timeEl = document.getElementById("timeText");
+        const subtitleEl = document.getElementById("subtitle");
+        const callBtn = document.getElementById("callBtn");
+        const hangBtn = document.getElementById("hangBtn");
+        const interruptBtn = document.getElementById("interruptBtn");
+        const clearSubBtn = document.getElementById("clearSubBtn");
+        const pageBody = document.body;
+        const pageTitle = document.getElementById("pageTitle");
+        const pageDesc = document.getElementById("pageDesc");
+        const subTitleHead = document.getElementById("subTitleHead");
+
+        // 主题配色库
+        const themeMap = {
+            pink:{bg:"#fff5f8",main:"#d87093",light:"#f09fbb",border:"#f7c8d8",subBg:"#fef0f4",text:"#994c6b"},
+            orange:{bg:"#fff8f0",main:"#e67e3b",light:"#f2995a",border:"#f9d4b8",subBg:"#fff2e6",text:"#994f22"},
+            yellow:{bg:"#fffde7",main:"#f0c848",light:"#f7d362",border:"#fff0a8",subBg:"#fffbdb",text:"#886600"},
+            green:{bg:"#f3fbf4",main:"#48a857",light:"#62bb70",border:"#c2e9c8",subBg:"#eaf9ed",text:"#2d7037"},
+            blue:{bg:"#f0f7ff",main:"#4488cc",light:"#62a8dd",border:"#b8d8f5",subBg:"#e8f2fe",text:"#255888"},
+            purple:{bg:"#f8f5ff",main:"#805ad5",light:"#9d7cd8",border:"#d6c8f2",subBg:"#f1ebfc",text:"#5a3d80"},
+            black:{bg:"#222222",main:"#555555",light:"#777777",border:"#444444",subBg:"#303030",text:"#eeeeee"},
+            white:{bg:"#ffffff",main:"#777777",light:"#999999",border:"#dddddd",subBg:"#f8f8f8",text:"#333333"},
+            brown:{bg:"#f7f2ee",main:"#8c6440",light:"#a67c52",border:"#ddc8b8",subBg:"#f2e9e2",text:"#5c3f27"},
+        };
+        // 默认绿色
+        let currentTheme = "green";
+
+        function applyTheme(name){
+            currentTheme = name;
+            const t = themeMap[name];
+            pageBody.setAttribute("theme", name);
+            pageBody.style.backgroundColor = t.bg;
+            pageTitle.style.color = t.main;
+            pageDesc.style.color = t.main;
+            subTitleHead.style.color = t.main;
+
+            callBtn.style.backgroundColor = t.light;
+            callBtn.style.boxShadow = `0 3px 8px ${t.border}`;
+            hangBtn.style.backgroundColor = t.main;
+            hangBtn.style.boxShadow = `0 3px 8px ${t.border}`;
+            interruptBtn.style.backgroundColor = t.light;
+            interruptBtn.style.boxShadow = `0 3px 8px ${t.border}`;
+            clearSubBtn.style.backgroundColor = t.light;
+            clearSubBtn.style.boxShadow = `0 3px 8px ${t.border}`;
+
+            subtitleEl.style.borderColor = t.border;
+            subtitleEl.style.backgroundColor = t.subBg;
+            subtitleEl.style.color = t.text;
+        }
+        applyTheme("green");
+
+        document.querySelectorAll(".theme-btn").forEach(btn=>{
+            btn.onclick = ()=>{
+                applyTheme(btn.dataset.theme);
+            }
+        })
+
+        // 更新状态文字+颜色
+        function setStatus(text, color="#666", showSpin=false) {
+            let spinDom = showSpin ? `<span class="loading-spin"></span>` : "";
+            statusEl.innerHTML = `【状态：${text}】${spinDom}`;
+            statusEl.style.color = color;
+        }
+        // 弹出提示
+        function showTip(msg){
+            tipEl.innerText = msg;
+            tipEl.style.display = "block";
+            setTimeout(()=> tipEl.style.display="none", 3000);
+        }
+        // 添加字幕，区分角色，自动滚动到底部
+        function addSubtitle(content, role="ai") {
+            const div = document.createElement("div");
+            div.className = role === "user" ? "user-text" : "ai-text";
+            div.innerText = content;
+            subtitleEl.appendChild(div);
+            subtitleEl.scrollTop = subtitleEl.scrollHeight;
+        }
+        // 清空字幕按钮
+        clearSubBtn.onclick = ()=>{
+            subtitleEl.innerHTML = "";
+        }
+        // 计时
+        function startTimer(){
+            startTime = Date.now();
+            timeEl.style.display = "block";
+            timer = setInterval(()=>{
+                const s = Math.floor((Date.now()-startTime)/1000);
+                const m = String(Math.floor(s/60)).padStart(2,"0");
+                const sec = String(s%60).padStart(2,"0");
+                timeEl.innerText = `通话时长：${m}:${sec}`;
+            }, 1000);
+        }
+        function stopTimer(){
+            clearInterval(timer);
+            timer = null;
+            timeEl.style.display = "none";
+        }
+        // 拨打
+        callBtn.onclick = async () => {
+            setStatus("连接中", "#f57f17", true);
+            callBtn.disabled = true;
+            hangBtn.style.opacity = "1";
+            interruptBtn.style.opacity = "1";
+            try {
+                // 申请麦克风 + 开启回声消除
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation: true }
+                });
+                ws = new WebSocket(WS_URL);
+
+                ws.onopen = () => {
+                    setStatus("通话中", "#2e7d32");
+                    startTimer();
+                    addSubtitle("✅ 已成功连接客服", "user");
+                };
+                ws.onmessage = (evt) => {
+                    // 后端传过来的数据，你可以约定：{role:"user",text:"xxx"}
+                    let data;
+                    try{
+                        data = JSON.parse(evt.data);
+                        addSubtitle(data.text, data.role || "ai");
+                    }catch(e){
+                        addSubtitle(evt.data, "ai");
+                    }
+                };
+                ws.onclose = () => {
+                    setStatus("已挂断", "#666");
+                    callBtn.disabled = false;
+                    stopTimer();
+                    addSubtitle("🔌 连接已断开", "ai");
+                };
+                ws.onerror = () => {
+                    setStatus("未连接", "#666");
+                    callBtn.disabled = false;
+                    stopTimer();
+                    addSubtitle("❌ 连接出错！", "ai");
+                    showTip("WebSocket服务器连接失败，请确认后端已启动");
+                };
+            } catch (err) {
+                setStatus("未连接", "#666");
+                callBtn.disabled = false;
+                showTip("麦克风授权失败，请在浏览器权限设置里允许麦克风");
+                addSubtitle("❌ 麦克风打开失败", "ai");
+            }
+        };
+
+        // 挂断
+        hangBtn.onclick = () => {
+            if (ws) ws.close();
+            if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+            setStatus("已挂断", "#666");
+            callBtn.disabled = false;
+            stopTimer();
+        };
+
+        // 打断
+        interruptBtn.onclick = () => {
+  clearAudioQueue();  // 就新加这一行
+  if(ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({type:"interrupt"}));
+    addSubtitle("⚡ 发送打断指令", "user");
+  }
+};
+    </script>
+</body>
